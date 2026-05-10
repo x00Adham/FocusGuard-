@@ -1,0 +1,310 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="w-full max-w-6xl px-4 py-8 self-start mt-8">
+    <!-- Header Section -->
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">My Workspace</h1>
+            <p class="text-gray-500 mt-1">Real-time focus and productivity tracking</p>
+        </div>
+        <div class="flex space-x-4">
+            <div class="flex items-center bg-white px-4 py-2 border border-gray-200 rounded-lg shadow-sm">
+                <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse mr-2"></div>
+                <span class="text-sm font-medium text-gray-700" id="connection-status">System Active</span>
+            </div>
+            <a href="/auth/logout" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg shadow-sm hover:bg-gray-50 transition">
+                Logout
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Left Column: Camera & Live Monitoring (Takes up 2/3 width on large screens) -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Camera Container -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 relative overflow-hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800">Live AI Analysis</h2>
+                    <span id="ai-status-badge" class="px-3 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-800">
+                        Initializing...
+                    </span>
+                </div>
+                
+                <!-- The Video Element and Canvas Overlay -->
+                <div class="relative bg-black rounded-lg overflow-hidden aspect-video shadow-inner flex items-center justify-center">
+                    <video id="webcam-feed" autoplay playsinline class="w-full h-full object-cover transform scale-x-[-1]"></video>
+                    
+                    <!-- NEW: Invisible Canvas for drawing AI dots -->
+                    <canvas id="ai-canvas" class="absolute inset-0 w-full h-full object-cover transform scale-x-[-1] pointer-events-none"></canvas>
+                    
+                    <!-- Overlay for when camera is off -->
+                    <div id="camera-overlay" class="absolute inset-0 flex flex-col items-center justify-center text-white bg-gray-900 z-10">
+                        <svg class="w-12 h-12 mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        <p>Requesting camera access...</p>
+                    </div>
+                </div>
+                
+                <!-- NEW: Calibration Slider -->
+                <div class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <label for="yaw-slider" class="block text-sm font-semibold text-gray-700 mb-2">Screen Position Calibration</label>
+                    <p class="text-xs text-gray-500 mb-3">Adjust this if your main monitor is to the left or right of your webcam.</p>
+                    
+                    <div class="flex items-center space-x-4">
+                        <span class="text-xs font-medium text-gray-500">Left</span>
+                        <input type="range" id="yaw-slider" min="-30" max="30" value="0" class="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer">
+                        <span class="text-xs font-medium text-gray-500">Right</span>
+                    </div>
+                    <div class="text-center mt-2 text-sm font-medium text-primary">
+                        Offset: <span id="yaw-value">0</span>°
+                    </div>
+                </div>
+                
+                <div class="mt-4 flex justify-between items-center text-sm text-gray-500">
+                    <p>Frames are processed locally and securely via WebSocket.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Stats & Notifications -->
+        <div class="space-y-6">
+            <!-- Current Focus Score -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 text-center">
+                <h3 class="text-gray-500 font-medium mb-2">Current Focus Score</h3>
+                <div class="relative inline-flex items-center justify-center">
+                    <svg class="w-32 h-32 transform -rotate-90">
+                        <circle cx="64" cy="64" r="56" stroke="currentColor" stroke-width="12" fill="transparent" class="text-gray-100" />
+                        <circle id="focus-circle" cx="64" cy="64" r="56" stroke="currentColor" stroke-width="12" fill="transparent" stroke-dasharray="351.86" stroke-dashoffset="0" class="text-primary transition-all duration-500 ease-in-out" />
+                    </svg>
+                    <span class="absolute text-4xl font-bold text-gray-800" id="focus-text">--%</span>
+                </div>
+                <p id="focus-message" class="mt-4 text-sm text-gray-600 font-medium">Calibrating AI...</p>
+            </div>
+
+            <!-- Today's Summary -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 class="font-semibold text-gray-800 mb-4">Today's Summary</h3>
+                <ul class="space-y-4">
+                    <li class="flex flex-col space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-500 text-sm">Status</span>
+                            {% if clocked_in %}
+                                {% if on_break %}
+                                    <span class="font-medium text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded text-sm">On Break</span>
+                                {% else %}
+                                    <span class="font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded text-sm">Clocked In at {{ clock_in_time }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded text-sm">Not Clocked In</span>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mt-2 space-y-2">
+                            {% if not clocked_in %}
+                                <form action="/employee/clock-in" method="POST">
+                                    <button type="submit" class="w-full bg-primary text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition">Start Shift (Clock In)</button>
+                                </form>
+                            {% else %}
+                                <div class="flex space-x-2">
+                                    {% if not on_break %}
+                                        <form action="/employee/start-break" method="POST" class="flex-1">
+                                            <button type="submit" class="w-full bg-yellow-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-yellow-600 transition" {% if remaining_seconds <= 0 %}disabled{% endif %}>Take Break</button>
+                                        </form>
+                                    {% else %}
+                                        <form action="/employee/end-break" method="POST" class="flex-1">
+                                            <button type="submit" class="w-full bg-green-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-green-600 transition">Resume Work</button>
+                                        </form>
+                                    {% endif %}
+                                    <form action="/employee/clock-out" method="POST" class="flex-1">
+                                        <button type="submit" class="w-full bg-red-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-red-600 transition">End Shift</button>
+                                    </form>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </li>
+
+                    <li class="flex justify-between items-center">
+                        <span class="text-gray-500 text-sm">Remaining Break Time</span>
+                        <span id="break-timer" class="font-medium {% if remaining_seconds <= 0 %}text-red-600{% elif on_break %}text-yellow-600{% else %}text-gray-800{% endif %}">
+                            {{ break_text }}
+                        </span>
+                    </li>
+
+                    <li class="flex justify-between items-center">
+                        <span class="text-gray-500 text-sm">Session Average Focus</span>
+                        <span class="font-medium text-gray-800">
+                            {% if clocked_in %}
+                                {{ session_avg_focus }}%
+                            {% else %}
+                                --%
+                            {% endif %}
+                        </span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript for Camera Control -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const videoElement = document.getElementById('webcam-feed');
+        const cameraOverlay = document.getElementById('camera-overlay');
+        const statusBadge = document.getElementById('ai-status-badge');
+        const focusText = document.getElementById('focus-text');
+        const focusMessage = document.getElementById('focus-message');
+        const focusCircle = document.getElementById('focus-circle');
+        
+        // Connect to the WebSocket server
+        const socket = io();
+
+        let stream = null;
+        let captureInterval = null;
+
+        // Hidden canvas to capture frames from the video
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480, facingMode: "user" } 
+                });
+                videoElement.srcObject = stream; 
+                
+                videoElement.onloadedmetadata = () => {
+                    cameraOverlay.style.display = 'none';
+                    canvas.width = videoElement.videoWidth;
+                    canvas.height = videoElement.videoHeight;
+                    
+                    // Start sending frames to the server every 1 second (1000ms)
+                    captureInterval = setInterval(sendFrameToServer, 1000);
+                };
+            } catch (err) {
+                console.error("Camera error: ", err);
+            }
+        }
+
+        const yawSlider = document.getElementById('yaw-slider');
+        const yawValueDisplay = document.getElementById('yaw-value');
+        
+        // Setup the overlay canvas for drawing dots
+        const aiCanvas = document.getElementById('ai-canvas');
+        const aiCtx = aiCanvas.getContext('2d');
+
+        // Update slider number display
+        yawSlider.addEventListener('input', (e) => {
+            yawValueDisplay.innerText = e.target.value;
+        });
+
+        function sendFrameToServer() {
+            const isClockedIn = "{{ 'true' if clocked_in else 'false' }}" === "true";
+            const isOnBreak = "{{ 'true' if on_break else 'false' }}" === "true";
+            
+            if (isClockedIn && !isOnBreak) {
+                // ... (normal camera processing) ...
+                context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+                const imageData = canvas.toDataURL('image/jpeg', 0.7);
+                const userId = "{{ session['user_id'] }}";
+                const currentYawOffset = parseFloat(yawSlider.value);
+                
+                socket.emit('video_frame', { 
+                    image: imageData, 
+                    user_id: userId,
+                    yaw_offset: currentYawOffset
+                });
+            } else if (isOnBreak) {
+                // If on a break, clear the UI and pause sending frames!
+                focusMessage.innerText = "Camera Paused (On Break)";
+                focusText.innerText = "--%";
+                focusCircle.classList.replace('text-primary', 'text-yellow-500');
+                statusBadge.innerText = 'System Paused';
+                statusBadge.className = 'px-3 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-800';
+                aiCtx.clearRect(0, 0, aiCanvas.width, aiCanvas.height); // clear neon dots
+            } else {
+                focusMessage.innerText = "Please Clock In to start AI Tracking";
+                focusText.innerText = "--%";
+            }
+        }
+
+        // --- LIVE BREAK TIMER ---
+        let remainingSeconds = parseInt("{{ remaining_seconds }}");
+        const isOnBreak = "{{ 'true' if on_break else 'false' }}" === "true";
+        const breakTimerDisplay = document.getElementById('break-timer');
+
+        if (isOnBreak && remainingSeconds > 0) {
+            // Run this every 1 second
+            setInterval(() => {
+                remainingSeconds--;
+                if (remainingSeconds <= 0) remainingSeconds = 0; // Prevent negative numbers
+
+                // Calculate minutes and seconds
+                const mins = Math.floor(remainingSeconds / 60);
+                const secs = remainingSeconds % 60;
+                
+                // Update the text on the screen
+                if (breakTimerDisplay) {
+                    breakTimerDisplay.innerText = `${mins}m ${secs}s`;
+                    
+                    // If time runs out, turn the text red!
+                    if (remainingSeconds === 0) {
+                        breakTimerDisplay.classList.replace('text-yellow-600', 'text-red-600');
+                    }
+                }
+            }, 1000); // 1000 ms = 1 second
+        }
+
+        // Listen for AI results and draw the landmarks!
+        socket.on('focus_result', function(data) {
+            focusText.innerText = data.score + '%';
+            focusMessage.innerText = data.status;
+            
+            // UI Color Changes
+            if (data.status === 'Absent') {
+                focusCircle.classList.replace('text-primary', 'text-red-500');
+                focusCircle.classList.replace('text-yellow-500', 'text-red-500');
+                statusBadge.innerText = 'Absent from Desk';
+                statusBadge.className = 'px-3 py-1 text-xs font-bold rounded-full bg-red-100 text-red-800';
+            } else if (data.status === 'Away (Grace Period)') {
+                focusCircle.classList.replace('text-primary', 'text-yellow-500');
+                focusCircle.classList.replace('text-green-500', 'text-yellow-500');
+                statusBadge.innerText = 'Away (Timer Started)';
+                statusBadge.className = 'px-3 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-800';
+            } else {
+                focusCircle.classList.replace('text-red-500', 'text-primary');
+                focusCircle.classList.replace('text-yellow-500', 'text-primary');
+                statusBadge.innerText = 'Active Tracking';
+                statusBadge.className = 'px-3 py-1 text-xs font-bold rounded-full bg-green-100 text-green-800';
+            }
+
+            // --- DRAW NEON LANDMARKS ---
+            // Ensure canvas matches video size
+            aiCanvas.width = videoElement.videoWidth;
+            aiCanvas.height = videoElement.videoHeight;
+            
+            // Clear the previous frame's drawings
+            aiCtx.clearRect(0, 0, aiCanvas.width, aiCanvas.height);
+            
+            if (data.landmarks && data.landmarks.length > 0) {
+                aiCtx.fillStyle = '#00FF00'; // Neon Green dots
+                
+                data.landmarks.forEach(point => {
+                    // Convert normalized coordinates (0-1) to exact pixel sizes
+                    const x = point.x * aiCanvas.width;
+                    const y = point.y * aiCanvas.height;
+                    
+                    aiCtx.beginPath();
+                    aiCtx.arc(x, y, 3, 0, 2 * Math.PI);
+                    aiCtx.fill();
+                });
+            }
+        });
+
+        startCamera();
+    });
+</script>
+{% endblock %}

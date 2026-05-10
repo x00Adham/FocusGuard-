@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus Guard - AI Monitoring</title>
+    
+    <!-- TailwindCSS for Modern Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Custom Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1E40AF', // Deep Blue
+                        secondary: '#475569',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans min-h-screen flex flex-col">
+
+    <!-- Main Content Injection Point -->
+    <main class="flex-grow flex items-center justify-center">
+        {% block content %}
+        <!-- Child templates will insert their HTML here -->
+        {% endblock %}
+    </main>
+
+    <footer class="text-center py-4 text-sm text-gray-500">
+        &copy; 2026 Focus Guard System. Academic Project.
+    </footer>
+</body>
+</html>
